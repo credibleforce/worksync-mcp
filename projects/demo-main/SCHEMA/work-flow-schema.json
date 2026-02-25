@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "work-flow-schema.json",
+  "title": "Demo Main Work Index",
+  "description": "Schema for work-index.yaml, which tracks sprints, backlog, and history for demo-main project.",
+  "type": "object",
+  "properties": {
+    "sprints": {
+      "type": "array",
+      "description": "All known sprints or review tracks.",
+      "items": { "$ref": "#/$defs/sprint" }
+    },
+    "backlog": {
+      "type": "array",
+      "description": "Backlog items that are not yet scheduled into a sprint.",
+      "items": { "$ref": "#/$defs/backlogItem" }
+    },
+    "history": {
+      "type": "array",
+      "description": "High-level historical notes tying work to sprints/themes.",
+      "items": { "$ref": "#/$defs/historyEntry" }
+    }
+  },
+  "required": ["sprints"],
+  "additionalProperties": false,
+  "$defs": {
+    "sprint": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Short identifier for the sprint."
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable sprint title."
+        },
+        "file": {
+          "type": "string",
+          "description": "Path to the markdown file that defines the sprint."
+        },
+        "status": {
+          "type": "string",
+          "description": "Current state of the sprint.",
+          "enum": ["planned", "active", "reference", "completed"]
+        },
+        "goal": {
+          "type": "string",
+          "description": "Optional summary of what the sprint aims to achieve."
+        },
+        "themes": {
+          "type": "array",
+          "description": "Optional list of cross-cutting themes this sprint relates to.",
+          "items": { "type": "string" }
+        },
+        "stories": {
+          "type": "array",
+          "description": "Optional list of stories within the sprint and their status.",
+          "items": { "$ref": "#/$defs/story" }
+        }
+      },
+      "required": ["id", "title", "file", "status"],
+      "additionalProperties": false
+    },
+    "story": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Story identifier."
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the story within the sprint.",
+          "enum": ["planned", "in_progress", "done"]
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional notes about scope, gaps, or follow-ups."
+        }
+      },
+      "required": ["id", "status"],
+      "additionalProperties": false
+    },
+    "backlogItem": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifier for the backlog item."
+        },
+        "theme": {
+          "type": "string",
+          "description": "High-level theme this backlog item is associated with."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Short description of the work to be done."
+        },
+        "status": {
+          "type": "string",
+          "description": "Status of the backlog item.",
+          "enum": ["todo", "in_progress", "done"]
+        },
+        "related_sprints": {
+          "type": "array",
+          "description": "Optional list of sprint ids this backlog item is or was associated with.",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["id", "summary", "status"],
+      "additionalProperties": false
+    },
+    "historyEntry": {
+      "type": "object",
+      "properties": {
+        "date": {
+          "type": "string",
+          "format": "date",
+          "description": "Date of the historical note (YYYY-MM-DD)."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Summary of what happened on this date."
+        },
+        "related_sprints": {
+          "type": "array",
+          "description": "Optional list of sprint ids this history entry relates to.",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["date", "summary"],
+      "additionalProperties": false
+    }
+  }
+}

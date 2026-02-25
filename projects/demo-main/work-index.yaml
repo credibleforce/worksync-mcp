@@ -1,0 +1,150 @@
+# yaml-language-server: $schema=./SCHEMA/work-flow-schema.json
+
+sprints: []
+
+backlog:
+  # ── CI/CD & DevOps (Score: 5.5/10) ──────────────────────────────────────
+  - id: cicd-sha-pinning
+    theme: devops
+    summary: "Pin all GitHub Actions to SHA-256 digests instead of semantic versions"
+    status: todo
+    related_sprints: []
+
+  - id: cicd-secrets-to-encrypted
+    theme: security
+    summary: "Move base64 variables to encrypted GitHub Secrets for backend config"
+    status: todo
+    related_sprints: []
+
+  - id: cicd-hardcode-org-removal
+    theme: devops
+    summary: "Replace hardcoded proservlab org name with github.repository_owner variable"
+    status: todo
+    related_sprints: []
+
+  - id: cicd-add-testing-workflow
+    theme: devops
+    summary: "Add terraform validate and fmt check workflow for pull requests"
+    status: todo
+    related_sprints: []
+
+  - id: cicd-add-security-scanning
+    theme: security
+    summary: "Add tfsec checkov and dependency scanning workflows for pull requests"
+    status: todo
+    related_sprints: []
+
+  - id: cicd-secret-masking
+    theme: security
+    summary: "Add add-mask directives for MongoDB passwords and SSM parameters in logs"
+    status: todo
+    related_sprints: []
+
+  - id: cicd-retry-logic
+    theme: devops
+    summary: "Implement exponential backoff retry for SSM and kubectl transient failures"
+    status: todo
+    related_sprints: []
+
+  # ── Terraform & Infrastructure ───────────────────────────────────────────
+  - id: tf-azure-keyvault-fix
+    theme: infrastructure
+    summary: "Separate Azure Key Vault instances for compute and SQL secret management"
+    status: todo
+    related_sprints: []
+
+  - id: tf-variable-validation
+    theme: infrastructure
+    summary: "Add validation blocks to complex Terraform input variable definitions"
+    status: todo
+    related_sprints: []
+
+  - id: tf-lacework-provider-sync
+    theme: infrastructure
+    summary: "Synchronize Lacework provider status across AWS GCP and Azure roots"
+    status: todo
+    related_sprints: []
+
+  - id: tf-state-recovery-runbook
+    theme: infrastructure
+    summary: "Document state lockout recovery procedures for central management account"
+    status: todo
+    related_sprints: []
+
+  - id: tf-portable-backend-names
+    theme: infrastructure
+    summary: "Make S3 bucket and DynamoDB table names configurable via variables"
+    status: todo
+    related_sprints: []
+
+  # ── synthctl CLI (0% CLI test coverage) ──────────────────────────────────
+  - id: synthctl-cli-test-coverage
+    theme: testing
+    summary: "Achieve 60 percent CLI test coverage by refactoring flag exit handling"
+    status: todo
+    related_sprints: []
+
+  - id: synthctl-reduce-duplication
+    theme: code-quality
+    summary: "Extract shared exec and las patterns to reduce 150 duplicated lines"
+    status: todo
+    related_sprints: []
+
+  - id: synthctl-lacework-full-api
+    theme: feature
+    summary: "Complete Lacework API integration coverage beyond current query runner"
+    status: todo
+    related_sprints: []
+
+  # ── Documentation & Runbooks ─────────────────────────────────────────────
+  - id: docs-implement-security-controls
+    theme: security
+    summary: "Implement planned security controls Falco SCPs audit logs kube-bench"
+    status: todo
+    related_sprints: []
+
+  - id: demo-hardening
+    theme: security
+    summary: "Apply demo hardening recommendations from DEMO-HARDENING.md runbook document"
+    status: todo
+    related_sprints: []
+
+  # ── Application Layer ────────────────────────────────────────────────────
+  - id: argocd-rbac-scoping
+    theme: security
+    summary: "Scope ArgoCD manager ClusterRole from wildcard to specific resource types"
+    status: todo
+    related_sprints: []
+
+  # ── Submodule Maintenance ────────────────────────────────────────────────
+  - id: submodule-maintenance
+    theme: infrastructure
+    summary: "Keep submodule references up to date across all 12 modules"
+    status: in_progress
+    related_sprints: []
+
+  # ── Frontend ─────────────────────────────────────────────────────────────
+  - id: terraform-ui-migration
+    theme: frontend
+    summary: "Complete Next.js App Router migration for terraform-ui submodule"
+    status: todo
+    related_sprints: []
+
+  # ── Completed ────────────────────────────────────────────────────────────
+  - id: argocd-cleanup
+    theme: infrastructure
+    summary: "Improve ArgoCD cleanup steps for timeout handling and error management"
+    status: done
+    related_sprints: []
+
+history:
+  - date: "2026-02-24"
+    summary: "Registered demo-main in WorkSync. Initial backlog populated from repo analysis."
+
+  - date: "2026-02-24"
+    summary: "Updated subproject commit references in scripts and terraform."
+    related_sprints: []
+
+  - date: "2026-02-24"
+    summary: "Deep WorkSync review: 4 parallel analyses (CI/CD, Terraform, Apps/ArgoCD, synthctl/docs). Expanded backlog from 5 to 21 items across 8 themes. CI/CD scored 5.5/10, synthctl CLI at 0% test coverage, terraform-ui production-ready."
+    related_sprints: []
