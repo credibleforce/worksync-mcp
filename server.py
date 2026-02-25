@@ -867,6 +867,188 @@ def worksync_guidance(
     return {"project": project, "guidance": result}
 
 
+@mcp.tool()
+def worksync_register_project(
+    name: str,
+    repo: str,
+    description: str = "",
+    languages: list[str] | None = None,
+    agent: str = "unknown",
+) -> dict:
+    """Register a new project for work tracking.
+
+    Creates the project directory structure, empty work-index.yaml,
+    and adds the project to config.yaml. Deterministic — both Claude
+    and Codex produce identical results.
+
+    Args:
+        name: Project identifier (kebab-case, e.g., 'my-new-project').
+        repo: Path to the source repository (e.g., '~/Documents/dev/my-project').
+        description: Short project description.
+        languages: Programming languages used (e.g., ['golang', 'typescript']).
+                   Used to set guidance inheritance. Auto-detected from repo if omitted.
+        agent: Agent making the change.
+
+    Returns:
+        Dict with created paths and config entry.
+    """
+    config = _load_config()
+    projects = config.setdefault("projects", {})
+
+    if name in projects:
+        return {"error": f"Project '{name}' already registered"}
+
+    # Resolve repo path
+    repo_path = Path(repo).expanduser().resolve()
+
+    # Auto-detect languages if not provided
+    if languages is None:
+        languages = []
+        if repo_path.exists():
+            if (repo_path / "go.mod").exists():
+                languages.append("golang")
+            if (repo_path / "package.json").exists():
+                languages.append("typescript")
+            if (repo_path / "pyproject.toml").exists() or (repo_path / "setup.py").exists():
+                languages.append("python")
+        if not languages:
+            languages = []
+
+    # Build guidance inheritance list
+    inherit = ["general", "ai-collaboration"]
+    for lang in languages:
+        if lang in ("golang", "typescript"):
+            inherit.insert(-1, lang)  # before ai-collaboration
+
+    # Create directory structure
+    project_dir = DATA_ROOT / "projects" / name
+    subdirs = ["BACKLOG", "COMPLETE", "PROMPTS", "SCHEMA"]
+    created_dirs = []
+
+    project_dir.mkdir(parents=True, exist_ok=True)
+    created_dirs.append(str(project_dir))
+
+    for subdir in subdirs:
+        d = project_dir / subdir
+        d.mkdir(exist_ok=True)
+        created_dirs.append(str(d))
+
+    # Create empty work-index.yaml
+    work_index = {
+        "sprints": [],
+        "backlog": [],
+        "history": [
+            {
+                "date": _today(),
+                "summary": f"Registered {name} in WorkSync.",
+            }
+        ],
+    }
+    work_index_path = project_dir / "work-index.yaml"
+    content = YAML_HEADER + yaml.dump(work_index, default_flow_style=False, sort_keys=False)
+    with open(work_index_path, "w") as f:
+        f.write(content)
+    _mtime_cache[str(work_index_path)] = work_index_path.stat().st_mtime
+
+    # Add to config.yaml
+    project_entry = {
+        "repo": repo,
+        "description": description,
+        "guidance": {
+            "inherit": inherit,
+        },
+    }
+    projects[name] = project_entry
+
+    # Write config atomically
+    config_content = yaml.dump(config, default_flow_style=False, sort_keys=False)
+    with _lock:
+        fd, tmp = tempfile.mkstemp(suffix=".yaml.tmp", dir=str(CONFIG_PATH.parent))
+        try:
+            os.write(fd, config_content.encode())
+            os.close(fd)
+            fd = None
+            os.replace(tmp, CONFIG_PATH)
+        except Exception:
+            if fd is not None:
+                os.close(fd)
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+            raise
+
+    logger.info("Registered project '%s' (agent: %s)", name, agent)
+
+    # Trigger vault sync
+    if AUTO_SYNC:
+        _queue_sync(name)
+
+    return {
+        "registered": name,
+        "repo": str(repo_path),
+        "description": description,
+        "languages_detected": languages,
+        "guidance_inherit": inherit,
+        "created_dirs": created_dirs,
+        "work_index": str(work_index_path),
+    }
+
+
+@mcp.tool()
+def worksync_unregister_project(
+    name: str,
+    delete_data: bool = False,
+    agent: str = "unknown",
+) -> dict:
+    """Remove a project from WorkSync registration.
+
+    Args:
+        name: Project name to unregister.
+        delete_data: If True, also delete the project data directory. Default: False (safe).
+        agent: Agent making the change.
+
+    Returns:
+        Confirmation of removal.
+    """
+    config = _load_config()
+    projects = config.get("projects", {})
+
+    if name not in projects:
+        return {"error": f"Project '{name}' not registered"}
+
+    removed_entry = projects.pop(name)
+
+    # Write config
+    config_content = yaml.dump(config, default_flow_style=False, sort_keys=False)
+    with _lock:
+        fd, tmp = tempfile.mkstemp(suffix=".yaml.tmp", dir=str(CONFIG_PATH.parent))
+        try:
+            os.write(fd, config_content.encode())
+            os.close(fd)
+            fd = None
+            os.replace(tmp, CONFIG_PATH)
+        except Exception:
+            if fd is not None:
+                os.close(fd)
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+            raise
+
+    result = {
+        "unregistered": name,
+        "config_removed": removed_entry,
+    }
+
+    if delete_data:
+        import shutil
+        project_dir = DATA_ROOT / "projects" / name
+        if project_dir.exists():
+            shutil.rmtree(project_dir)
+            result["data_deleted"] = str(project_dir)
+
+    logger.info("Unregistered project '%s' (delete_data=%s, agent: %s)", name, delete_data, agent)
+    return result
+
+
 # ---------------------------------------------------------------------------
 # MCP Prompts (replace workflow files — agents discover these on connect)
 # ---------------------------------------------------------------------------
@@ -945,14 +1127,10 @@ def prompt_work_done(story_id: str = "STORY-1", notes: str = "", project: str = 
 def prompt_add_project(name: str = "", repo: str = "") -> str:
     """Generate a project registration prompt."""
     return (
-        f"Register a new project '{name}' with repo at '{repo}'. Steps:\n"
-        "1. Detect languages in the repo (go.mod -> golang, package.json -> typescript)\n"
-        "2. Create the directory structure at ~/.worksync/projects/<name>/:\n"
-        "   - work-index.yaml (empty sprints, scan repo for initial backlog ideas)\n"
-        "   - BACKLOG/, COMPLETE/, PROMPTS/, SCHEMA/ directories\n"
-        "3. Add the project to ~/.worksync/config.yaml with repo path and guidance inheritance\n"
-        "4. Call worksync_sync to generate initial vault content\n"
-        "5. Report what was created"
+        f"Call worksync_register_project with name='{name}', repo='{repo}'. "
+        "The tool handles everything: directory creation, work-index.yaml scaffold, "
+        "config.yaml update, language detection, and guidance inheritance. "
+        "Report what was created from the response."
     )
 
 

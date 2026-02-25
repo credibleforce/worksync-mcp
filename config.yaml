@@ -1,38 +1,34 @@
-# WorkSync Configuration
-# Maps project names to their source repositories and settings
-
-# Available foundational guidance (in ./guidance/):
-#   - general: Universal coding practices
-#   - golang: Go-specific patterns
-#   - typescript: TypeScript/React patterns
-#   - ai-collaboration: Working with AI assistants
-
 projects:
   synthetic-data-pipeline:
     repo: ~/Documents/dev/synthetic-data-pipline-project
-    description: "Synthetic data infrastructure with synthctl CLI"
+    description: Synthetic data infrastructure with synthctl CLI
     guidance:
-      inherit: [general, golang, ai-collaboration]
+      inherit:
+      - general
+      - golang
+      - ai-collaboration
       project:
-        - name: synthctl-coding
-          source: repo
-          path: tools/synthctl/CODING-GUIDANCE.md
-        - name: claude-context
-          source: repo
-          path: tools/CLAUDE.md
-
+      - name: synthctl-coding
+        source: repo
+        path: tools/synthctl/CODING-GUIDANCE.md
+      - name: claude-context
+        source: repo
+        path: tools/CLAUDE.md
   demo-main:
     repo: ~/Documents/dev/demo-main
-    description: "Cloud security demo infrastructure mono-repo with 12 submodules (Terraform, ArgoCD, synthctl, UI)"
+    description: Cloud security demo infrastructure mono-repo with 12 submodules (Terraform,
+      ArgoCD, synthctl, UI)
     guidance:
-      inherit: [general, golang, typescript, ai-collaboration]
+      inherit:
+      - general
+      - golang
+      - typescript
+      - ai-collaboration
       project:
-        - name: synthctl-coding
-          source: repo
-          path: synthctl/CODING-GUIDANCE.md
-
+      - name: synthctl-coding
+        source: repo
+        path: synthctl/CODING-GUIDANCE.md
 vault_path: ./vault
-
 settings:
-  auto_sync: false          # sync vault after status changes
-  history_rotation: 100     # archive history entries older than N items
+  auto_sync: false
+  history_rotation: 100

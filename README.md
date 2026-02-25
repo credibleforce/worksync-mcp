@@ -97,6 +97,19 @@ url = "http://127.0.0.1:8321/mcp"
 Note: Codex auth headers require a `pai-codex` launcher to hydrate the token
 into the environment before starting Codex.
 
+**Codex env layout (recommended):**
+
+Keep non-secret values in `~/.codex/.env` and secrets in `~/.codex/.env.secret`.
+Have `pai-codex` read `.env` first, then `.env.secret` so secrets override.
+Make sure `WORKSYNC_API_KEY` only lives in `.env.secret` so a `.env` auto-loader
+cannot overwrite the hydrated value.
+
+Example `~/.codex/.env.secret`:
+
+```bash
+WORKSYNC_API_KEY=op://AI/WORKSYNC_API_KEY/credential
+```
+
 ### 5. Verify
 
 ```bash
