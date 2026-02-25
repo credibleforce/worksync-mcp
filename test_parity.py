@@ -58,6 +58,30 @@ async def run_parity_test():
                     print(f"  FAIL: {test_name} — {detail}")
 
             # ----------------------------------------------------------
+            # 0. Pre-cleanup: remove leftover test data from previous runs
+            # ----------------------------------------------------------
+            print("\n--- Pre-cleanup: removing leftover test data ---")
+
+            # Remove test backlog if it exists
+            await call_tool(session, "worksync_remove_backlog", {
+                "project": TEST_PROJECT,
+                "id": TEST_BACKLOG_ID,
+                "agent": "parity-test-cleanup",
+            })
+
+            # Remove test sprint/story by loading and rewriting YAML
+            # (No remove_sprint tool exists, so we clean via direct load/save)
+            pre_data = await call_tool(session, "worksync_status", {"project": TEST_PROJECT})
+            # We can't remove sprints via MCP, so check if test sprint exists
+            # and skip create if it does — OR we patch the YAML directly for cleanup.
+            # For now, let's use a fresh test ID if one already exists.
+            import random
+            suffix = f"-{random.randint(1000,9999)}"
+            _test_sprint = TEST_SPRINT_ID + suffix
+            _test_story = TEST_STORY_ID + suffix
+            print(f"  Using test IDs: sprint={_test_sprint}, story={_test_story}")
+
+            # ----------------------------------------------------------
             # 1. Baseline: read status as "claude-code" agent
             # ----------------------------------------------------------
             print("\n--- Test 1: Read parity (claude-code vs codex) ---")
@@ -142,7 +166,7 @@ async def run_parity_test():
 
             sprint_result = await call_tool(session, "worksync_create_sprint", {
                 "project": TEST_PROJECT,
-                "id": TEST_SPRINT_ID,
+                "id": _test_sprint,
                 "title": "Parity Test Sprint",
                 "goal": "Verify cross-agent parity",
                 "themes": ["testing"],
@@ -156,8 +180,8 @@ async def run_parity_test():
 
             story_result = await call_tool(session, "worksync_add_story", {
                 "project": TEST_PROJECT,
-                "sprint_id": TEST_SPRINT_ID,
-                "story_id": TEST_STORY_ID,
+                "sprint_id": _test_sprint,
+                "story_id": _test_story,
                 "status": "in_progress",
                 "notes": "Testing parity",
                 "agent": "codex",
@@ -170,7 +194,7 @@ async def run_parity_test():
 
             done_result = await call_tool(session, "worksync_done", {
                 "project": TEST_PROJECT,
-                "story_id": TEST_STORY_ID,
+                "story_id": _test_story,
                 "notes": "Parity verified",
                 "agent": "claude-code",
             })
@@ -195,7 +219,7 @@ async def run_parity_test():
                 "action": "list",
             })
             history = history_result.get("history", [])
-            parity_entries = [h for h in history if TEST_STORY_ID in h.get("summary", "")]
+            parity_entries = [h for h in history if _test_story in h.get("summary", "")]
             check(
                 "History: parity test entry exists",
                 len(parity_entries) >= 1,

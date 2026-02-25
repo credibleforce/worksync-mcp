@@ -53,9 +53,57 @@ logger = logging.getLogger("worksync-mcp")
 # MCP Server
 # ---------------------------------------------------------------------------
 
+INSTRUCTIONS = """\
+WorkSync is a shared work tracking system for multi-agent coordination with Obsidian vault sync.
+
+## Data Model
+
+Each project has a `work-index.yaml` with three sections:
+
+- **sprints[]**: Work iterations. Fields: id, title, file, status, goal, themes[], stories[]
+- **backlog[]**: Unscheduled work items. Fields: id, theme, summary, status, related_sprints[]
+- **history[]**: Append-only log. Fields: date, summary, related_sprints[]
+
+## Statuses
+
+| Entity  | Valid Statuses                        |
+|---------|---------------------------------------|
+| Sprint  | planned, active, reference, completed |
+| Story   | planned, in_progress, done            |
+| Backlog | todo, in_progress, done               |
+
+## Conventions
+
+- IDs are kebab-case (e.g., `cicd-sha-pinning`, `feature-sprint-1`)
+- Story IDs are uppercase (e.g., `STORY-1`, `STORY-2`)
+- Always pass your agent name in the `agent` parameter for attribution
+- All mutations are atomic (validated YAML, os.replace) with debounced vault sync
+
+## Guardrails
+
+- **All writes go through MCP tools.** Never write work-index.yaml directly.
+- **Reads are allowed directly** via rg/grep on ~/.worksync/projects/ for fast search.
+- The server is single-writer. Concurrent tool calls are serialized.
+- External (human) edits are detected via mtime and accepted on next read.
+
+## Typical Session Workflow
+
+1. **Start**: Call `worksync_status()` to see active sprints and in-progress work
+2. **Focus**: Read sprint/story context from the status response
+3. **Work**: Update story status with `worksync_update_story()` as you progress
+4. **Complete**: Call `worksync_done()` to mark stories done (auto-appends history)
+5. **Sync**: Vault auto-syncs after mutations. Call `worksync_sync()` to force.
+
+## Guidance
+
+Call `worksync_guidance(project)` to get coding guidance for a project. Guidance is \
+layered: foundational patterns (general, golang, typescript, ai-collaboration) merged \
+with project-specific docs from the repo.
+"""
+
 mcp = FastMCP(
     "WorkSync",
-    instructions="Multi-agent work tracking with Obsidian vault sync",
+    instructions=INSTRUCTIONS,
     host=HOST,
     port=PORT,
 )
@@ -751,6 +799,154 @@ def worksync_sync(project: str | None = None) -> dict:
             }
     except subprocess.TimeoutExpired:
         return {"status": "error", "error": "Sync timed out after 60 seconds"}
+
+
+@mcp.tool()
+def worksync_guidance(
+    project: str,
+    topic: str | None = None,
+) -> dict:
+    """Get coding guidance for a project.
+
+    Returns foundational guidance (general, golang, typescript, ai-collaboration)
+    merged with any project-specific guidance configured in config.yaml.
+
+    Args:
+        project: Project name.
+        topic: Optional filter. One of: general, golang, typescript, ai-collaboration,
+               or a project-specific guidance name. If omitted, returns all applicable.
+
+    Returns:
+        Dict with guidance documents keyed by name.
+    """
+    config = _load_config()
+    projects = config.get("projects", {})
+    if project not in projects:
+        return {"error": f"Project '{project}' not found"}
+
+    project_config = projects[project]
+    guidance_config = project_config.get("guidance", {})
+    inherit_list = guidance_config.get("inherit", ["general", "ai-collaboration"])
+
+    guidance_dir = DATA_ROOT / "guidance"
+    result = {}
+
+    # Load foundational guidance
+    for name in inherit_list:
+        if topic and topic != name:
+            continue
+        path = guidance_dir / f"{name}.md"
+        if path.exists():
+            result[name] = path.read_text()
+
+    # Load project-specific guidance
+    project_guidance = guidance_config.get("project", [])
+    repo_path = Path(project_config.get("repo", "")).expanduser()
+    for pg in project_guidance:
+        pg_name = pg.get("name", "unknown")
+        if topic and topic != pg_name:
+            continue
+        source = pg.get("source", "repo")
+        if source == "repo" and repo_path.exists():
+            doc_path = repo_path / pg.get("path", "")
+            if doc_path.exists():
+                result[pg_name] = doc_path.read_text()
+
+    if not result:
+        if topic:
+            return {"error": f"No guidance found for topic '{topic}'"}
+        return {"error": "No guidance configured for this project"}
+
+    return {"project": project, "guidance": result}
+
+
+# ---------------------------------------------------------------------------
+# MCP Prompts (replace workflow files — agents discover these on connect)
+# ---------------------------------------------------------------------------
+
+@mcp.prompt(
+    name="work_status",
+    description="Check work status across projects. Shows active sprints, in-progress stories, and backlog stats.",
+)
+def prompt_work_status(project: str = "") -> str:
+    """Generate a work status check prompt."""
+    if project:
+        return (
+            f"Call worksync_status with project='{project}'. "
+            "Display the results as a summary table showing active sprints, "
+            "in-progress stories, and backlog stats (total, todo, in_progress, done)."
+        )
+    return (
+        "Call worksync_status with no arguments to get status for all projects. "
+        "Display the results as a summary table per project showing active sprints, "
+        "in-progress stories, and backlog stats (total, todo, in_progress, done)."
+    )
+
+
+@mcp.prompt(
+    name="work_sync",
+    description="Regenerate the Obsidian vault from YAML source files.",
+)
+def prompt_work_sync(project: str = "") -> str:
+    """Generate a vault sync prompt."""
+    if project:
+        return (
+            f"Call worksync_sync with project='{project}'. "
+            "Report whether the sync succeeded and summarize the output."
+        )
+    return (
+        "Call worksync_sync with no arguments to sync all projects. "
+        "Report whether the sync succeeded and summarize the output."
+    )
+
+
+@mcp.prompt(
+    name="work_focus",
+    description="Load context for a specific story to prepare for focused work.",
+)
+def prompt_work_focus(story_id: str = "STORY-1", project: str = "") -> str:
+    """Generate a story focus prompt."""
+    project_hint = f" in project '{project}'" if project else ""
+    return (
+        f"I want to focus on story {story_id}{project_hint}. "
+        f"1. Call worksync_status to find which project and sprint contains {story_id}. "
+        f"2. Extract the story notes, sprint goal, and themes. "
+        f"3. Call worksync_guidance for the project to load coding context. "
+        f"4. Present a summary: story status, sprint context, related work, and applicable guidance."
+    )
+
+
+@mcp.prompt(
+    name="work_done",
+    description="Mark a story as done with completion notes.",
+)
+def prompt_work_done(story_id: str = "STORY-1", notes: str = "", project: str = "") -> str:
+    """Generate a story completion prompt."""
+    project_hint = f", project='{project}'" if project else ""
+    notes_hint = f", notes='{notes}'" if notes else ""
+    return (
+        f"Call worksync_done with story_id='{story_id}'{project_hint}{notes_hint}. "
+        "The server will mark the story as done, append a history entry, and sync the vault. "
+        "Report the result and suggest the next story in the same sprint if one exists."
+    )
+
+
+@mcp.prompt(
+    name="add_project",
+    description="Register a new project for work tracking.",
+)
+def prompt_add_project(name: str = "", repo: str = "") -> str:
+    """Generate a project registration prompt."""
+    return (
+        f"Register a new project '{name}' with repo at '{repo}'. Steps:\n"
+        "1. Detect languages in the repo (go.mod -> golang, package.json -> typescript)\n"
+        "2. Create the directory structure at ~/.worksync/projects/<name>/:\n"
+        "   - work-index.yaml (empty sprints, scan repo for initial backlog ideas)\n"
+        "   - BACKLOG/, COMPLETE/, PROMPTS/, SCHEMA/ directories\n"
+        "3. Add the project to ~/.worksync/config.yaml with repo path and guidance inheritance\n"
+        "4. Call worksync_sync to generate initial vault content\n"
+        "5. Report what was created"
+    )
 
 
 # ---------------------------------------------------------------------------

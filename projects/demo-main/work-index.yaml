@@ -1,17 +1,6 @@
 # yaml-language-server: $schema=./SCHEMA/work-flow-schema.json
 
-sprints:
-- id: _parity-test-sprint
-  title: Parity Test Sprint
-  file: _PARITY-TEST-SPRINT.md
-  status: planned
-  goal: Verify cross-agent parity
-  themes:
-  - testing
-  stories:
-  - id: _PARITY-STORY-1
-    status: done
-    notes: Parity verified
+sprints: []
 backlog:
 - id: cicd-sha-pinning
   theme: devops
@@ -129,7 +118,3 @@ history:
     synthctl/docs). Expanded backlog from 5 to 21 items across 8 themes. CI/CD scored
     5.5/10, synthctl CLI at 0% test coverage, terraform-ui production-ready.'
   related_sprints: []
-- date: '2026-02-25'
-  summary: 'Completed _PARITY-STORY-1: Parity verified'
-  related_sprints:
-  - _parity-test-sprint
