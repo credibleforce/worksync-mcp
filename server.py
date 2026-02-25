@@ -39,6 +39,7 @@ AUTO_SYNC = os.environ.get("WORKSYNC_AUTO_SYNC", "true").lower() in ("true", "1"
 SYNC_DEBOUNCE_SEC = float(os.environ.get("WORKSYNC_SYNC_DEBOUNCE", "2.0"))
 
 API_KEY = os.environ.get("WORKSYNC_API_KEY", "")
+WORKSYNC_DEBUG = os.environ.get("WORKSYNC_DEBUG", "").lower() in ("true", "1", "yes")
 
 CONFIG_PATH = DATA_ROOT / "config.yaml"
 SYNC_PY_PATH = DATA_ROOT / "sync.py"
@@ -1011,40 +1012,56 @@ def worksync_unregister_project(
     """
     config = _load_config()
     projects = config.get("projects", {})
+    project_dir = DATA_ROOT / "projects" / name
+    vault_path = config.get("vault_path", "./vault")
+    vault_dir = (DATA_ROOT / vault_path / "projects" / name).resolve()
 
-    if name not in projects:
-        return {"error": f"Project '{name}' not registered"}
+    in_config = name in projects
+    on_disk = project_dir.exists()
+    in_vault = vault_dir.exists()
 
-    removed_entry = projects.pop(name)
+    if not in_config and not on_disk and not in_vault:
+        return {"error": f"Project '{name}' not found (not in config, no data on disk, no vault artifacts)"}
 
-    # Write config
-    config_content = yaml.dump(config, default_flow_style=False, sort_keys=False)
-    with _lock:
-        fd, tmp = tempfile.mkstemp(suffix=".yaml.tmp", dir=str(CONFIG_PATH.parent))
-        try:
-            os.write(fd, config_content.encode())
-            os.close(fd)
-            fd = None
-            os.replace(tmp, CONFIG_PATH)
-        except Exception:
-            if fd is not None:
+    result = {}
+
+    # Remove from config if present
+    if in_config:
+        removed_entry = projects.pop(name)
+        config_content = yaml.dump(config, default_flow_style=False, sort_keys=False)
+        with _lock:
+            fd, tmp = tempfile.mkstemp(suffix=".yaml.tmp", dir=str(CONFIG_PATH.parent))
+            try:
+                os.write(fd, config_content.encode())
                 os.close(fd)
-            if os.path.exists(tmp):
-                os.unlink(tmp)
-            raise
+                fd = None
+                os.replace(tmp, CONFIG_PATH)
+            except Exception:
+                if fd is not None:
+                    os.close(fd)
+                if os.path.exists(tmp):
+                    os.unlink(tmp)
+                raise
+        result["config_removed"] = removed_entry
+    else:
+        result["config_removed"] = None
+        result["note"] = "Was not in config (already unregistered). Cleaning orphaned data."
 
-    result = {
-        "unregistered": name,
-        "config_removed": removed_entry,
-    }
-
+    # Delete data directory if requested and present
     if delete_data:
         import shutil
-        project_dir = DATA_ROOT / "projects" / name
-        if project_dir.exists():
+        if on_disk:
             shutil.rmtree(project_dir)
             result["data_deleted"] = str(project_dir)
 
+        # Also clean generated vault output
+        vault_path = config.get("vault_path", "./vault")
+        vault_dir = (DATA_ROOT / vault_path / "projects" / name).resolve()
+        if vault_dir.exists():
+            shutil.rmtree(vault_dir)
+            result["vault_deleted"] = str(vault_dir)
+
+    result["unregistered"] = name
     logger.info("Unregistered project '%s' (delete_data=%s, agent: %s)", name, delete_data, agent)
     return result
 
@@ -1059,16 +1076,35 @@ def worksync_unregister_project(
 )
 def prompt_work_status(project: str = "") -> str:
     """Generate a work status check prompt."""
-    if project:
-        return (
-            f"Call worksync_status with project='{project}'. "
-            "Display the results as a summary table showing active sprints, "
-            "in-progress stories, and backlog stats (total, todo, in_progress, done)."
-        )
+    project_arg = f"project='{project}'" if project else "no arguments (all projects)"
     return (
-        "Call worksync_status with no arguments to get status for all projects. "
-        "Display the results as a summary table per project showing active sprints, "
-        "in-progress stories, and backlog stats (total, todo, in_progress, done)."
+        f"Call worksync_status with {project_arg}. "
+        "Display the results using this exact structure:\n\n"
+        "```\n"
+        "## <project-name>\n"
+        "\n"
+        "**Active Sprints:**\n"
+        "  <id> — <title> (<N stories, M in progress>)\n"
+        "  (or 'None' if no active sprints)\n"
+        "\n"
+        "**In Progress:**\n"
+        "| ID | Sprint | Notes |\n"
+        "|-----|---------|-------|\n"
+        "| STORY-1 | sprint-id | truncated notes... |\n"
+        "  (include in-progress backlog items with Sprint='backlog')\n"
+        "  (or 'None' if nothing in progress)\n"
+        "\n"
+        "**Backlog:** <total> total — <todo> todo, <in_progress> active, <done> done\n"
+        "\n"
+        "**Recent History:** (last 3 entries)\n"
+        "  - <date>: <summary>\n"
+        "```\n\n"
+        "Rules:\n"
+        "- One section per project, separated by a horizontal rule\n"
+        "- Truncate notes to 60 chars max\n"
+        "- If no active sprints and no in-progress work, show a one-liner: "
+        "'<project>: idle — <N> backlog items'\n"
+        "- Keep it compact for CLI readability"
     )
 
 
@@ -1165,10 +1201,15 @@ def main():
     logger.info("  Sync:      %s", SYNC_PY_PATH)
     logger.info("  Endpoint:  http://%s:%d/mcp", HOST, PORT)
     logger.info("  Auto-sync: %s (debounce: %.1fs)", AUTO_SYNC, SYNC_DEBOUNCE_SEC)
-    logger.info("  Auth:      %s", "bearer token" if API_KEY else "DISABLED (no WORKSYNC_API_KEY)")
-
-    if not API_KEY:
-        logger.warning("No WORKSYNC_API_KEY set — running WITHOUT authentication")
+    if API_KEY:
+        logger.info("  Auth:      bearer token")
+    elif WORKSYNC_DEBUG:
+        logger.warning("  Auth:      DISABLED (WORKSYNC_DEBUG=1)")
+        logger.warning("  ⚠ Running without authentication — debug mode only!")
+    else:
+        logger.error("  Auth:      MISSING")
+        logger.error("WORKSYNC_API_KEY is required. Set it in the environment or start with WORKSYNC_DEBUG=1 to disable auth.")
+        sys.exit(1)
 
     # Validate config exists
     if not CONFIG_PATH.exists():
