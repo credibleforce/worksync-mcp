@@ -7,6 +7,7 @@ agent identities are exercised and results compared.
 """
 import asyncio
 import json
+import os
 import subprocess
 import sys
 import time
@@ -15,6 +16,7 @@ from copy import deepcopy
 VENV_PYTHON = str(sys.executable)
 SERVER_SCRIPT = "/home/jamie/.worksync/server.py"
 MCP_URL = "http://127.0.0.1:8321/mcp"
+API_KEY = os.environ.get("WORKSYNC_API_KEY", "")
 
 # Test project — uses demo-main which has existing data
 TEST_PROJECT = "demo-main"
@@ -38,7 +40,11 @@ async def run_parity_test():
     from mcp.client.streamable_http import streamablehttp_client
     from mcp import ClientSession
 
-    async with streamablehttp_client(MCP_URL) as (read, write, _):
+    headers = {}
+    if API_KEY:
+        headers["Authorization"] = f"Bearer {API_KEY}"
+
+    async with streamablehttp_client(MCP_URL, headers=headers) as (read, write, _):
         async with ClientSession(read, write) as session:
             init_result = await session.initialize()
             print(f"Connected: {init_result.serverInfo.name} v{init_result.serverInfo.version}")

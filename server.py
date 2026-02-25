@@ -11,6 +11,7 @@ Usage:
     WORKSYNC_PORT=9000 python server.py       # custom port
 """
 
+import hmac
 import logging
 import os
 import subprocess
@@ -20,8 +21,12 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+import uvicorn
 import yaml
 from mcp.server.fastmcp import FastMCP
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -32,6 +37,8 @@ HOST = os.environ.get("WORKSYNC_HOST", "127.0.0.1")
 PORT = int(os.environ.get("WORKSYNC_PORT", "8321"))
 AUTO_SYNC = os.environ.get("WORKSYNC_AUTO_SYNC", "true").lower() in ("true", "1", "yes")
 SYNC_DEBOUNCE_SEC = float(os.environ.get("WORKSYNC_SYNC_DEBOUNCE", "2.0"))
+
+API_KEY = os.environ.get("WORKSYNC_API_KEY", "")
 
 CONFIG_PATH = DATA_ROOT / "config.yaml"
 SYNC_PY_PATH = DATA_ROOT / "sync.py"
@@ -953,6 +960,25 @@ def prompt_add_project(name: str = "", repo: str = "") -> str:
 # Main
 # ---------------------------------------------------------------------------
 
+class BearerAuthMiddleware(BaseHTTPMiddleware):
+    """Validate Authorization: Bearer <token> on every request."""
+
+    async def dispatch(self, request: Request, call_next):
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+        else:
+            token = ""
+
+        if not hmac.compare_digest(token, API_KEY):
+            return JSONResponse(
+                {"error": "Unauthorized", "detail": "Invalid or missing bearer token"},
+                status_code=401,
+            )
+
+        return await call_next(request)
+
+
 def main():
     """Start the WorkSync MCP server."""
     logger.info("WorkSync MCP Server starting")
@@ -961,6 +987,10 @@ def main():
     logger.info("  Sync:      %s", SYNC_PY_PATH)
     logger.info("  Endpoint:  http://%s:%d/mcp", HOST, PORT)
     logger.info("  Auto-sync: %s (debounce: %.1fs)", AUTO_SYNC, SYNC_DEBOUNCE_SEC)
+    logger.info("  Auth:      %s", "bearer token" if API_KEY else "DISABLED (no WORKSYNC_API_KEY)")
+
+    if not API_KEY:
+        logger.warning("No WORKSYNC_API_KEY set — running WITHOUT authentication")
 
     # Validate config exists
     if not CONFIG_PATH.exists():
@@ -972,7 +1002,12 @@ def main():
     projects = list(config.get("projects", {}).keys())
     logger.info("  Projects:  %s", ", ".join(projects) or "(none)")
 
-    mcp.run(transport="streamable-http")
+    # Build Starlette app with optional auth middleware
+    app = mcp.streamable_http_app()
+    if API_KEY:
+        app.add_middleware(BearerAuthMiddleware)
+
+    uvicorn.run(app, host=HOST, port=PORT)
 
 
 if __name__ == "__main__":

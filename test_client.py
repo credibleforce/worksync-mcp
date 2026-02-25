@@ -5,19 +5,25 @@ Tests tools, prompts, instructions, and guidance delivery.
 """
 import asyncio
 import json
+import os
 import subprocess
 import sys
 import time
 
 VENV_PYTHON = str(sys.executable)
 SERVER_SCRIPT = "/home/jamie/.worksync/server.py"
+API_KEY = os.environ.get("WORKSYNC_API_KEY", "")
 
 
 async def run_client():
     from mcp.client.streamable_http import streamablehttp_client
     from mcp import ClientSession
 
-    async with streamablehttp_client("http://127.0.0.1:8321/mcp") as (read, write, _):
+    headers = {}
+    if API_KEY:
+        headers["Authorization"] = f"Bearer {API_KEY}"
+
+    async with streamablehttp_client("http://127.0.0.1:8321/mcp", headers=headers) as (read, write, _):
         async with ClientSession(read, write) as session:
             init_result = await session.initialize()
             print(f"Connected: {init_result.serverInfo.name} v{init_result.serverInfo.version}")

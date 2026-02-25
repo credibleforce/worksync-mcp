@@ -24,35 +24,68 @@ cd ~/.worksync
 uv venv && uv pip install -e .
 ```
 
-### 2. Start the Server
+### 2. Set Up Authentication
 
+Create a bearer token in 1Password:
+
+- **Vault:** `AI`
+- **Item name:** `WORKSYNC_API_KEY`
+- **Field:** `credential`
+
+Add the reference to `~/.claude/.env`:
+
+```bash
+WORKSYNC_API_KEY=op://AI/WORKSYNC_API_KEY/credential
+```
+
+The `pai()` and `worksync()` shell functions hydrate this from 1Password at startup.
+No secrets are written to disk — they only exist in process memory.
+
+### 3. Start the Server
+
+**Recommended — shell function (hydrates from 1Password, runs in background):**
+```bash
+worksync start     # hydrate from op + start background server
+worksync stop      # stop the server
+worksync restart   # stop + start
+worksync status    # check if running
+worksync logs      # tail the log file
+```
+
+The `worksync` function is defined in `~/.zshrc`. It signs into 1Password,
+reads the API key, and passes it as an env var to the server process.
+Secrets only live in memory — never written to disk.
+
+**Standalone script (for environments without the shell function):**
+```bash
+~/.worksync/worksync-mcp.sh           # hydrate from op + run foreground
+~/.worksync/worksync-mcp.sh --no-auth # dev mode, no auth
+```
+
+**Manual (dev mode):**
 ```bash
 cd ~/.worksync && .venv/bin/python server.py
 ```
 
-The server starts on `http://127.0.0.1:8321/mcp` by default.
+The server binds to `127.0.0.1:8321` (localhost only).
 
-### 3. Configure Agents
+### 4. Configure Agents
 
-**Claude Code** (add to `~/.claude.json` per-project, or use CLI):
-
-```bash
-claude mcp add --transport http --scope user \
-  --header "X-WorkSync-Agent: claude-code" \
-  worksync http://127.0.0.1:8321/mcp
-```
-
-Or manually in `~/.claude.json` under `projects.<path>.mcpServers`:
+**Claude Code** (in `~/.claude.json` per-project `mcpServers`):
 
 ```json
 {
   "worksync": {
     "type": "http",
     "url": "http://127.0.0.1:8321/mcp",
-    "headers": { "X-WorkSync-Agent": "claude-code" }
+    "headers": {
+      "Authorization": "Bearer ${WORKSYNC_API_KEY}"
+    }
   }
 }
 ```
+
+The `${WORKSYNC_API_KEY}` is expanded from the environment (hydrated by `pai()`).
 
 **Codex** (add to `~/.codex/config.toml`):
 
@@ -61,7 +94,10 @@ Or manually in `~/.claude.json` under `projects.<path>.mcpServers`:
 url = "http://127.0.0.1:8321/mcp"
 ```
 
-### 4. Verify
+Note: Codex auth headers require a `pai-codex` launcher to hydrate the token
+into the environment before starting Codex.
+
+### 5. Verify
 
 ```bash
 cd ~/.worksync && .venv/bin/python test_client.py
@@ -71,7 +107,8 @@ cd ~/.worksync && .venv/bin/python test_client.py
 
 ```
 ~/.worksync/
-├── server.py              # MCP server (start this)
+├── server.py              # MCP server
+├── worksync-mcp.sh        # Standalone launcher (hydrates from op)
 ├── sync.py                # Vault generator (called by server)
 ├── test_client.py         # Integration test
 ├── test_parity.py         # Cross-agent parity test
@@ -108,6 +145,7 @@ cd ~/.worksync && .venv/bin/python test_client.py
 | `worksync_done` | Mark story done + append history entry |
 | `worksync_history` | View or append project history |
 | `worksync_sync` | Regenerate Obsidian vault from YAML |
+| `worksync_guidance` | Get coding guidance for a project |
 
 ## Environment Variables
 
@@ -118,32 +156,24 @@ cd ~/.worksync && .venv/bin/python test_client.py
 | `WORKSYNC_PORT` | `8321` | Server port |
 | `WORKSYNC_AUTO_SYNC` | `true` | Auto-sync vault after mutations |
 | `WORKSYNC_SYNC_DEBOUNCE` | `2.0` | Seconds to debounce vault sync |
+| `WORKSYNC_API_KEY` | _(none)_ | Bearer token for auth. If unset, auth is disabled. |
 
-## Running as a Service
+## Security
 
-### systemd (Linux)
+- **No secrets on disk**: API key hydrated from 1Password into env var at startup. Never written to a file.
+- **Localhost only**: Server binds to `127.0.0.1` — not accessible from the network
+- **Bearer token auth**: When `WORKSYNC_API_KEY` is set, every request requires `Authorization: Bearer <token>`
+- **1Password integration**: Token stored in vault `AI`, hydrated via `op read` at startup
+- **Timing-safe comparison**: Token validation uses `hmac.compare_digest` (constant-time)
+- **Dev mode**: If no API key is set, auth is disabled with a warning log
 
-Create `~/.config/systemd/user/worksync-mcp.service`:
-
-```ini
-[Unit]
-Description=WorkSync MCP Server
-After=network.target
-
-[Service]
-Type=simple
-WorkingDirectory=%h/.worksync
-ExecStart=%h/.worksync/.venv/bin/python %h/.worksync/server.py
-Restart=on-failure
-RestartSec=5
-
-[Install]
-WantedBy=default.target
+**Auth flow:**
 ```
-
-```bash
-systemctl --user daemon-reload
-systemctl --user enable --now worksync-mcp
+worksync start (interactive shell)
+  ├── op signin         (biometric/password — interactive)
+  ├── op read API_KEY   (from 1Password vault AI)
+  ├── WORKSYNC_API_KEY=$key python server.py &  (env var only, no file)
+  └── echo $! > .pid    (just the PID, no secrets)
 ```
 
 ## Design Principles
@@ -153,7 +183,7 @@ systemctl --user enable --now worksync-mcp
 - **External edit detection**: Tracks file mtimes to detect human edits between MCP calls.
 - **Debounced sync**: Rapid mutations collapse into a single vault regeneration (2s default).
 - **YAML header preservation**: Maintains `# yaml-language-server` schema comments.
-- **Agent attribution**: Each mutation logs which agent made the change.
+- **Agent attribution**: Each mutation logs which agent made the change (via `agent` tool parameter).
 
 ## Obsidian Vault
 
