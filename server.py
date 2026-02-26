@@ -14,6 +14,7 @@ Usage:
 import hmac
 import logging
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -83,12 +84,14 @@ Each project has a `work-index.yaml` with three sections:
 ## Conventions
 
 - IDs are kebab-case (e.g., `cicd-sha-pinning`, `feature-sprint-1`)
-- Story IDs are uppercase (e.g., `STORY-1`, `STORY-2`)
+- Story IDs are uppercase (e.g., `STORY-1`, `STORY-2`) and **globally unique per project** (not per sprint)
+- Omit `story_id` when calling `worksync_add_story` to auto-assign the next available STORY-N
 - Always pass your agent name in the `agent` parameter for attribution
 - All mutations are atomic (validated YAML, os.replace) with debounced vault sync
 
 ## Guardrails
 
+- **Story IDs are project-unique.** The server rejects duplicate story IDs across sprints and suggests the next available ID.
 - **All writes go through MCP tools.** Never write work-index.yaml directly.
 - **Reads are allowed directly** via rg/grep on ~/.worksync/projects/ for fast search.
 - The server is single-writer. Concurrent tool calls are serialized.
@@ -250,6 +253,32 @@ def _now_iso() -> str:
 def _today() -> str:
     """Current date as YYYY-MM-DD."""
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _all_story_ids(data: dict) -> dict[str, str]:
+    """Collect all story IDs across all sprints. Returns {story_id: sprint_id}."""
+    ids: dict[str, str] = {}
+    for sprint in data.get("sprints", []):
+        sprint_id = sprint.get("id", "")
+        for story in sprint.get("stories", []):
+            if isinstance(story, dict) and story.get("id"):
+                ids[story["id"]] = sprint_id
+    return ids
+
+
+def _next_story_id(data: dict) -> str:
+    """Generate the next available STORY-N ID (project-wide).
+
+    Scans all sprints, finds the highest numeric STORY-N, returns STORY-(N+1).
+    Non-numeric suffixes (e.g. STORY-5b) are ignored for counting.
+    """
+    existing = _all_story_ids(data)
+    max_n = 0
+    for sid in existing:
+        m = re.match(r"^STORY-(\d+)$", sid)
+        if m:
+            max_n = max(max_n, int(m.group(1)))
+    return f"STORY-{max_n + 1}"
 
 
 # ---------------------------------------------------------------------------
@@ -566,23 +595,26 @@ def worksync_update_sprint(
 def worksync_add_story(
     project: str,
     sprint_id: str,
-    story_id: str,
+    story_id: str | None = None,
     status: str = "planned",
     notes: str = "",
     agent: str = "unknown",
 ) -> dict:
     """Add a story to a sprint.
 
+    Story IDs must be unique across ALL sprints within a project.
+    If story_id is omitted, the server auto-assigns the next available STORY-N.
+
     Args:
         project: Project name.
         sprint_id: Sprint to add the story to.
-        story_id: Story identifier (e.g., 'STORY-1').
+        story_id: Story identifier (e.g., 'STORY-7'). Omit to auto-assign.
         status: Initial status (planned | in_progress | done).
         notes: Optional notes about scope or context.
         agent: Agent making the change.
 
     Returns:
-        The created story.
+        The created story with its assigned ID.
     """
     _validate_project(project)
     data = _load_work_index(project)
@@ -596,14 +628,23 @@ def worksync_add_story(
     if not sprint:
         return {"error": f"Sprint '{sprint_id}' not found"}
 
-    stories = sprint.setdefault("stories", [])
-    if any(s.get("id") == story_id for s in stories if isinstance(s, dict)):
-        return {"error": f"Story '{story_id}' already exists in sprint '{sprint_id}'"}
+    # Auto-assign or validate global uniqueness
+    existing = _all_story_ids(data)
+    if story_id is None:
+        story_id = _next_story_id(data)
+    elif story_id in existing:
+        suggestion = _next_story_id(data)
+        owner_sprint = existing[story_id]
+        return {
+            "error": f"Story '{story_id}' already exists in sprint '{owner_sprint}'.",
+            "suggestion": suggestion,
+            "hint": f"Next available: {suggestion}. Or omit story_id to auto-assign.",
+        }
 
     new_story = {"id": story_id, "status": status}
     if notes:
         new_story["notes"] = notes
-    stories.append(new_story)
+    sprint.setdefault("stories", []).append(new_story)
 
     _save_work_index(project, data, agent)
     logger.info("Added story '%s' to sprint '%s' in %s (agent: %s)", story_id, sprint_id, project, agent)

@@ -65,7 +65,7 @@ sprints:
   - go-mod
   - synthctl
   stories:
-  - id: STORY-1
+  - id: STORY-7
     status: done
     notes: Completed migration refs to github.com/proservlab/synthctl, regenerated
       schemas, fixed schema validation issues (scenario/applications + regex), updated
@@ -340,7 +340,7 @@ history:
   related_sprints:
   - gcp-cicd-foundation
 - date: '2026-02-26'
-  summary: 'Completed STORY-1: Completed migration refs to github.com/proservlab/synthctl,
+  summary: 'Completed STORY-7: Completed migration refs to github.com/proservlab/synthctl,
     regenerated schemas, fixed schema validation issues (scenario/applications + regex),
     updated schema $id for config/combined to avoid double schemas path, and smoke-tested
     synthctl CLI (go test ./internal/cli/... passes).'
