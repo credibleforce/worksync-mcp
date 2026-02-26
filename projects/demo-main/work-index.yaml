@@ -71,6 +71,67 @@ sprints:
       schemas, fixed schema validation issues (scenario/applications + regex), updated
       schema $id for config/combined to avoid double schemas path, and smoke-tested
       synthctl CLI (go test ./internal/cli/... passes).
+- id: gcp-compute-parity
+  title: GCP Compute Instance Parity
+  file: GCP-COMPUTE-PARITY.md
+  status: planned
+  goal: 'Bring GCE instance creation to parity with AWS EC2: SSH key management via
+    Secret Manager, GCP-native bootstrapping scripts, configurable boot disk, instance
+    metadata for accessibility, and structured outputs'
+  themes:
+  - gcp
+  - compute
+  - parity
+  stories:
+  - id: STORY-8
+    status: planned
+    notes: 'Create tls_private_key (RSA 4096) resource. Store private key PEM and
+      public key OpenSSH in google_secret_manager_secret_version resources. GCP equivalent
+      of the AWS ssh-keys-kms module at terraform/stacks/aws/modules/ssh-keys-kms/.
+      Conditionally created only when GCE instances exist (count = length(local.gce_enabled)
+      > 0 ? 1 : 0). Reference: terraform-org-management gce/ssh.tf pattern.'
+  - id: STORY-9
+    status: planned
+    notes: 'Switch GCE module from terraform-google-modules/vm/google//modules/instance_template
+      to a direct google_compute_instance resource. Include: (1) boot_disk with configurable
+      size via root_volume_size config field, defaults to 30 for Windows, 15 for Linux
+      (matching AWS EC2 pattern); (2) network_interface wired to the correct public/private
+      subnet from module.network; (3) service_account block with cloud-platform scope;
+      (4) static external IP for public instances via google_compute_address; (5)
+      SSH public key injection via metadata ssh-keys field. Depends on STORY-8 for
+      SSH key. Reference: terraform-org-management gce/instance/main.tf.'
+  - id: STORY-10
+    status: planned
+    notes: "Linux: Wire bootstrap.sh template as metadata_startup_script with GCP-native\
+      \ setup (apt/yum wait loop, google-osconfig-agent install, optional swap, optional\
+      \ secondary disk mount, additional_tasks). No SSM agent \u2014 GCP uses osconfig\
+      \ instead. Windows: Wire bootstrap.ps1 template as sysprep-specialize-script-ps1\
+      \ metadata key with csp=gcp, instance_name, and public_key_openssh template\
+      \ vars. Instance metadata flags: enable-osconfig=true, enable-oslogin=true,\
+      \ serial-port-enable=true, enable-windows-ssh (conditional), enable-windows-automatic-updates\
+      \ (conditional). OS detection via startswith(image_name, windows_). Depends\
+      \ on STORY-9 for the google_compute_instance resource. Reference: terraform-org-management\
+      \ gce/instance/main.tf lines 93-106."
+  - id: STORY-11
+    status: planned
+    notes: 'Expose GCE instance details in the stack output matching the AWS EC2 output
+      shape: instance id, name, private_ip (network_interface.0.network_ip), public_ip
+      (access_config.0.nat_ip), base64-encoded ssh_key_public and ssh_key (private
+      key PEM), labels, project_id, region. Update terraform/root/gcp/outputs.tf to
+      surface GCE data alongside existing GKE outputs. Reference: terraform-org-management
+      gce/outputs.tf pattern. Depends on STORY-10 for complete instance resource.'
+  - id: STORY-12
+    status: planned
+    notes: 'Full schema pipeline update for new GCE instance config fields added in
+      STORY-9/10. Chain: (1) Update synthctl Go types in internal/infrastructure/
+      to add new GCEInstance fields (root_volume_size, enable_swap, enable_secondary_volume,
+      secondary_disk_size, user_data, user_data_base64). (2) Rebuild synthctl and
+      regenerate schemas/infrastructure.json via synthctl schema generate --type infrastructure
+      --provider gcp. (3) Update terraform-ui configSchema.js to include new GCE fields
+      in the form builder. (4) Update terraform-ui componentLibrary.js with appropriate
+      input components (number spinner for volume sizes, toggles for booleans). Validate:
+      all 4 existing GCP infra configs pass schema validation. Depends on STORY-9
+      and STORY-10 to know the final field set.'
 backlog:
 - id: cicd-sha-pinning
   theme: devops
