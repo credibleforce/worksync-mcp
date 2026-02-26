@@ -1,6 +1,54 @@
 # yaml-language-server: $schema=./SCHEMA/work-flow-schema.json
 
-sprints: []
+sprints:
+- id: gcp-cicd-foundation
+  title: GCP CI/CD Foundation (WS1)
+  file: GCP-CICD-FOUNDATION.md
+  status: active
+  goal: Establish GCP state backend integration and GitHub Actions CI/CD with Workload
+    Identity Federation, mirroring the existing AWS OIDC pattern
+  themes:
+  - gcp-cicd
+  - infrastructure
+  - devops
+  stories:
+  - id: STORY-1
+    status: done
+    notes: Bootstrap audit complete. Old bucket preserved (account-management workspace
+      intact). New bootstrap created with dmo-terraform-* naming, state migrated to
+      GCS. Workspace support deferred to backlog.
+  - id: STORY-2
+    status: done
+    notes: 'WIF pool (github-pool), provider (github-provider), and per-repo SA bindings
+      created in bootstrap apply. Provider: projects/94087649681/locations/global/workloadIdentityPools/github-pool/providers/github-provider.
+      SA: dmo-terraform-github@dmo-tf-res-x3pme6r0.iam.gserviceaccount.com'
+  - id: STORY-3
+    status: in_progress
+    notes: 'Create .github/actions/gcp-multi-project-setup/action.yml composite action.
+      Mirror aws-multi-account-setup pattern: exchange GitHub OIDC token via google-github-actions/auth,
+      configure gcloud CLI, set up project-level access for attacker/target projects.
+      Use Terraform version 1.10.5 (matching AWS action). Outputs: authenticated gcloud
+      context, available project IDs.'
+  - id: STORY-4
+    status: planned
+    notes: 'Extend or create .github/actions/terraform-init/ composite action for
+      GCS backend rehydration. Mirror AWS terraform-init pattern: rehydrate backend.tf
+      from base64-encoded GitHub variable (TF_GCP_ROOT_BACKEND), run terraform init
+      -reconfigure, select/create workspace. May extend existing action with CSP parameter
+      or create gcp-specific variant.'
+  - id: STORY-5
+    status: planned
+    notes: 'Create GCP GitHub Actions workflows: terraform-plan-gcp.yml, terraform-deploy-gcp.yml,
+      terraform-destroy-gcp.yml. Alternative: parameterize existing AWS workflows
+      to accept CSP input. Must use id-token:write permission, call gcp-multi-project-setup
+      action, use GCS backend. Reference existing: terraform-plan.yml, terraform-deploy.yml,
+      terraform-destroy.yml.'
+  - id: STORY-6
+    status: planned
+    notes: "Mirror setup/cross-account/aws/ for GCP \u2014 create deployment service\
+      \ accounts in attacker/target GCP projects with Workload Identity Federation\
+      \ trust back to the management project's WIF pool. Equivalent of synthctl-deployment-role\
+      \ IAM roles. State remains in management project GCS bucket."
 backlog:
 - id: cicd-sha-pinning
   theme: devops
@@ -107,6 +155,110 @@ backlog:
   summary: Improve ArgoCD cleanup steps for timeout handling and error management
   status: done
   related_sprints: []
+- id: gcp-tf-stack-audit
+  theme: gcp-terraform
+  summary: Audit GCP TF stack (246 lines) against AWS stack (1,785 lines) to identify
+    missing resource types and module gaps
+  status: todo
+  related_sprints:
+  - gcp-cicd-foundation
+- id: gcp-gke-autoscale-module
+  theme: gcp-terraform
+  summary: Create GKE autoscale module (GCP equivalent of eks-autoscale) with Workload
+    Identity instead of IRSA
+  status: todo
+  related_sprints: []
+- id: gcp-gcs-with-iam-module
+  theme: gcp-terraform
+  summary: "Create GCS-with-IAM module (GCP equivalent of s3-with-iam) \u2014 bucket\
+    \ + IAM bindings + VPC Service Controls"
+  status: todo
+  related_sprints: []
+- id: gcp-cloudsql-backup-module
+  theme: gcp-terraform
+  summary: "Create CloudSQL-GCS-backup module (GCP equivalent of rds-s3-backup) \u2014\
+    \ Cloud SQL + automated export to GCS"
+  status: todo
+  related_sprints: []
+- id: gcp-ssh-sa-key-modules
+  theme: gcp-terraform
+  summary: "Create GCP key management modules \u2014 SA keys + Cloud KMS + Secret\
+    \ Manager (equivalents of iam-keys-kms, ssh-keys-kms, iam-key-to-ssm-user)"
+  status: todo
+  related_sprints: []
+- id: gcp-firewall-trusts-module
+  theme: gcp-terraform
+  summary: Create GCP firewall trusts module (equivalent of security-group-trusts)
+    using GCP firewall rules for trusted IPs/tags
+  status: todo
+  related_sprints: []
+- id: gcp-root-module-review
+  theme: gcp-terraform
+  summary: Review terraform/root/gcp/ to verify attacker/target provider aliases wire
+    correctly through to stacks
+  status: todo
+  related_sprints: []
+- id: gcp-synthctl-types
+  theme: gcp-synthctl
+  summary: "Define GCP Go types in schema/types.go \u2014 GCPSides, GCPStackConfig,\
+    \ GCEInstance, GCPBucket, GKECluster, GCPServiceAccount, etc."
+  status: todo
+  related_sprints: []
+- id: gcp-synthctl-providers
+  theme: gcp-synthctl
+  summary: Add GCPProviders struct to providers.go with project IDs and regions for
+    attacker/target, update Doc struct and validation
+  status: todo
+  related_sprints: []
+- id: gcp-synthctl-generator
+  theme: gcp-synthctl
+  summary: Replace GCP placeholder in generator.go with actual GCPStackConfig type
+    reflection for schema generation
+  status: todo
+  related_sprints: []
+- id: gcp-synthctl-cli-init
+  theme: gcp-synthctl
+  summary: Extend synthctl providers init CLI to accept --gcp-attacker-project, --gcp-target-project,
+    --gcp-*-region flags
+  status: todo
+  related_sprints: []
+- id: gcp-schemas-regenerate
+  theme: gcp-synthctl
+  summary: Regenerate local schemas/ via synthctl schema generate --provider gcp once
+    Go types are defined
+  status: todo
+  related_sprints: []
+- id: gcp-ui-component-audit
+  theme: gcp-ui
+  summary: Audit terraform-ui componentLibrary.js GCP components against actual TF
+    stack resources for completeness
+  status: todo
+  related_sprints: []
+- id: gcp-ui-schema-audit
+  theme: gcp-ui
+  summary: Audit terraform-ui configSchemas.js GCP fields against actual Terraform
+    variable names for accuracy
+  status: todo
+  related_sprints: []
+- id: gcp-ui-export-validation
+  theme: gcp-ui
+  summary: Validate that terraform-ui auto.tfvars.json export for GCP scenarios produces
+    valid input for terraform/root/gcp/
+  status: todo
+  related_sprints: []
+- id: gcp-ui-schema-sync
+  theme: gcp-ui
+  summary: Sync terraform-ui validation against regenerated JSON schemas from synthctl
+    after GCP types are added
+  status: todo
+  related_sprints: []
+- id: gcp-bootstrap-workspace
+  theme: gcp-cicd
+  summary: Add workspace support to GCP bootstrap for multi-environment isolation
+    (e.g., bootstrap per org/billing account). Migrate default state to named workspace.
+  status: todo
+  related_sprints:
+  - gcp-cicd-foundation
 history:
 - date: '2026-02-24'
   summary: Registered demo-main in WorkSync. Initial backlog populated from repo analysis.
@@ -118,3 +270,22 @@ history:
     synthctl/docs). Expanded backlog from 5 to 21 items across 8 themes. CI/CD scored
     5.5/10, synthctl CLI at 0% test coverage, terraform-ui production-ready.'
   related_sprints: []
+- date: '2026-02-25'
+  summary: "Scoped GCP support across 4 workstreams (22 items): WS1 CI/CD Foundation\
+    \ (6 stories, sprinted), WS2 TF Module Parity (7 backlog), WS3 synthctl Schema\
+    \ (5 backlog), WS4 terraform-ui Alignment (4 backlog). GCP is ~30% built \u2014\
+    \ UI layer ahead, CI/CD and synthctl schema are major gaps."
+  related_sprints:
+  - gcp-cicd-foundation
+- date: '2026-02-26'
+  summary: 'Completed STORY-1: Bootstrap audit complete. Old bucket preserved (account-management
+    workspace intact). New bootstrap created with dmo-terraform-* naming, state migrated
+    to GCS. Workspace support deferred to backlog.'
+  related_sprints:
+  - gcp-cicd-foundation
+- date: '2026-02-26'
+  summary: 'Completed STORY-2: WIF pool (github-pool), provider (github-provider),
+    and per-repo SA bindings created in bootstrap apply. Provider: projects/94087649681/locations/global/workloadIdentityPools/github-pool/providers/github-provider.
+    SA: dmo-terraform-github@dmo-tf-res-x3pme6r0.iam.gserviceaccount.com'
+  related_sprints:
+  - gcp-cicd-foundation
