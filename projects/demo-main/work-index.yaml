@@ -57,7 +57,7 @@ sprints:
 - id: synthctl-git-repo-rename
   title: Synthctl Git Repo Rename
   file: SYNTHCTL-GIT-REPO-RENAME.md
-  status: planned
+  status: completed
   goal: Replace all references to github.com/lacework-dev/synthctl with github.com/proservlab/synthctl
     as part of the repo migration
   themes:
@@ -74,7 +74,7 @@ sprints:
 - id: gcp-compute-parity
   title: GCP Compute Instance Parity
   file: GCP-COMPUTE-PARITY.md
-  status: planned
+  status: active
   goal: 'Bring GCE instance creation to parity with AWS EC2: SSH key management via
     Secret Manager, GCP-native bootstrapping scripts, configurable boot disk, instance
     metadata for accessibility, and structured outputs'
@@ -84,14 +84,14 @@ sprints:
   - parity
   stories:
   - id: STORY-8
-    status: planned
+    status: done
     notes: 'Create tls_private_key (RSA 4096) resource. Store private key PEM and
       public key OpenSSH in google_secret_manager_secret_version resources. GCP equivalent
       of the AWS ssh-keys-kms module at terraform/stacks/aws/modules/ssh-keys-kms/.
       Conditionally created only when GCE instances exist (count = length(local.gce_enabled)
       > 0 ? 1 : 0). Reference: terraform-org-management gce/ssh.tf pattern.'
   - id: STORY-9
-    status: planned
+    status: done
     notes: 'Switch GCE module from terraform-google-modules/vm/google//modules/instance_template
       to a direct google_compute_instance resource. Include: (1) boot_disk with configurable
       size via root_volume_size config field, defaults to 30 for Windows, 15 for Linux
@@ -101,7 +101,7 @@ sprints:
       SSH public key injection via metadata ssh-keys field. Depends on STORY-8 for
       SSH key. Reference: terraform-org-management gce/instance/main.tf.'
   - id: STORY-10
-    status: planned
+    status: done
     notes: "Linux: Wire bootstrap.sh template as metadata_startup_script with GCP-native\
       \ setup (apt/yum wait loop, google-osconfig-agent install, optional swap, optional\
       \ secondary disk mount, additional_tasks). No SSM agent \u2014 GCP uses osconfig\
