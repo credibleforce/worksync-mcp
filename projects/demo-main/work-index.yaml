@@ -23,12 +23,10 @@ sprints:
       created in bootstrap apply. Provider: projects/94087649681/locations/global/workloadIdentityPools/github-pool/providers/github-provider.
       SA: dmo-terraform-github@dmo-tf-res-x3pme6r0.iam.gserviceaccount.com'
   - id: STORY-3
-    status: in_progress
-    notes: 'Create .github/actions/gcp-multi-project-setup/action.yml composite action.
-      Mirror aws-multi-account-setup pattern: exchange GitHub OIDC token via google-github-actions/auth,
-      configure gcloud CLI, set up project-level access for attacker/target projects.
-      Use Terraform version 1.10.5 (matching AWS action). Outputs: authenticated gcloud
-      context, available project IDs.'
+    status: done
+    notes: GCP multi-project setup composite action complete. Created .github/actions/gcp-multi-project-setup/action.yml
+      with WIF auth via google-github-actions/auth@v2, gcloud CLI setup via setup-gcloud@v2,
+      Terraform 1.10.5, and outputs for project-id and credentials-file.
   - id: STORY-4
     status: done
     notes: GCP Schema & Config Baseline complete. Added 10 GCP struct types to synthctl/internal/schema/types.go
@@ -39,18 +37,40 @@ sprints:
       with full GCP definitions. Created config/infrastructure.d/gcp.demo.auto.tfvars.json
       baseline config that validates against schema.
   - id: STORY-5
-    status: planned
-    notes: 'Create GCP GitHub Actions workflows: terraform-plan-gcp.yml, terraform-deploy-gcp.yml,
-      terraform-destroy-gcp.yml. Alternative: parameterize existing AWS workflows
-      to accept CSP input. Must use id-token:write permission, call gcp-multi-project-setup
-      action, use GCS backend. Reference existing: terraform-plan.yml, terraform-deploy.yml,
-      terraform-destroy.yml.'
+    status: done
+    notes: Parameterized plan/deploy/destroy workflows with csp input (aws/gcp choice).
+      CSP-gated auth steps, computed env vars (TF_WORKING_DIR, TF_PLAN_FILE, TF_BACKEND_CONFIG),
+      EKS kubeconfig gated to AWS, post-deploy/pre-destroy gated to AWS. Created config/providers.d/gcp.demo.auto.tfvars.json.
+      AWS default behavior preserved. Requires TF_GCP_ROOT_BACKEND repo variable.
   - id: STORY-6
     status: planned
     notes: "Mirror setup/cross-account/aws/ for GCP \u2014 create deployment service\
       \ accounts in attacker/target GCP projects with Workload Identity Federation\
       \ trust back to the management project's WIF pool. Equivalent of synthctl-deployment-role\
       \ IAM roles. State remains in management project GCS bucket."
+  - id: STORY-5b
+    status: done
+    notes: Added --type providers to synthctl schema generator. Created GCPProviders
+      struct in providers.go, GenerateProvidersSchema in generator.go, wired into
+      CLI. Rebuilt synthctl, regenerated schemas/providers.json. All 4 existing providers
+      files validate. Updated both schemas/README.md and synthctl/README.md.
+- id: synthctl-git-repo-rename
+  title: Synthctl Git Repo Rename
+  file: SYNTHCTL-GIT-REPO-RENAME.md
+  status: planned
+  goal: Replace all references to github.com/lacework-dev/synthctl with github.com/proservlab/synthctl
+    as part of the repo migration
+  themes:
+  - repo-migration
+  - go-mod
+  - synthctl
+  stories:
+  - id: STORY-1
+    status: done
+    notes: Completed migration refs to github.com/proservlab/synthctl, regenerated
+      schemas, fixed schema validation issues (scenario/applications + regex), updated
+      schema $id for config/combined to avoid double schemas path, and smoke-tested
+      synthctl CLI (go test ./internal/cli/... passes).
 backlog:
 - id: cicd-sha-pinning
   theme: devops
@@ -305,3 +325,24 @@ history:
     against schema.'
   related_sprints:
   - gcp-cicd-foundation
+- date: '2026-02-26'
+  summary: 'Completed STORY-3: GCP multi-project setup composite action complete.
+    Created .github/actions/gcp-multi-project-setup/action.yml with WIF auth via google-github-actions/auth@v2,
+    gcloud CLI setup via setup-gcloud@v2, Terraform 1.10.5, and outputs for project-id
+    and credentials-file.'
+  related_sprints:
+  - gcp-cicd-foundation
+- date: '2026-02-26'
+  summary: 'Completed STORY-5b: Added --type providers to synthctl schema generator.
+    Created GCPProviders struct in providers.go, GenerateProvidersSchema in generator.go,
+    wired into CLI. Rebuilt synthctl, regenerated schemas/providers.json. All 4 existing
+    providers files validate. Updated both schemas/README.md and synthctl/README.md.'
+  related_sprints:
+  - gcp-cicd-foundation
+- date: '2026-02-26'
+  summary: 'Completed STORY-1: Completed migration refs to github.com/proservlab/synthctl,
+    regenerated schemas, fixed schema validation issues (scenario/applications + regex),
+    updated schema $id for config/combined to avoid double schemas path, and smoke-tested
+    synthctl CLI (go test ./internal/cli/... passes).'
+  related_sprints:
+  - synthctl-git-repo-rename
