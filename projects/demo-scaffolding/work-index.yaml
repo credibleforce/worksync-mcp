@@ -1,0 +1,109 @@
+# yaml-language-server: $schema=./SCHEMA/work-flow-schema.json
+
+sprints:
+- id: initial-setup
+  title: Initial Setup - OIDC + Cross-Account Bootstrap
+  file: INITIAL-SETUP.md
+  status: completed
+  goal: Scaffold repo, bootstrap three AWS accounts with OIDC and cross-account trust,
+    create CI/CD workflow for lacework-deploy
+  themes:
+  - infrastructure
+  - ci-cd
+  - security
+  stories:
+  - id: STORY-1
+    status: done
+    notes: 'Repo initialized at ~/Documents/dev/demo-scaffolding. Branch: main. lacework-deploy
+      added as git submodule. Directory structure: setup/bootstrap/aws, setup/cross-account/aws,
+      .github/workflows, .github/actions/aws-multi-account-setup, docs'
+  - id: STORY-2
+    status: done
+    notes: 'Profiles verified: demo-mgmt-1 (202951751587), attacker-demo-1 (799708875162),
+      target-demo-1 (895890049939). All bootstrap-admin IAM users working.'
+  - id: STORY-3
+    status: done
+    notes: 'Bootstrap applied and state migrated to S3. OIDC role: arn:aws:iam::202951751587:role/GitHubActionsOIDC.
+      State bucket: demo-tf-state-5jmey3hv. DynamoDB: demo-tf-locks-5jmey3hv.'
+  - id: STORY-4
+    status: done
+    notes: 'Cross-account roles deployed. Attacker: arn:aws:iam::799708875162:role/demo-deployment-role.
+      Target: arn:aws:iam::895890049939:role/demo-deployment-role. Both trust GitHubActionsOIDC
+      from mgmt. AdministratorAccess attached.'
+  - id: STORY-5
+    status: done
+    notes: 'Workflows written: terraform-plan (PR + dispatch), terraform-deploy (plan/apply),
+      terraform-destroy (with confirm gate). Composite action for OIDC + workspace
+      discovery + profile generation. Security-hardened with env vars per hook guidance.'
+  - id: STORY-6
+    status: done
+    notes: 'READMEs written: root README.md (architecture, setup guide, CI/CD flow,
+      naming conventions, AWS account security with 1Password MFA walkthrough, migration
+      notes), setup/bootstrap/aws/README.md (resources, trust model, variables, outputs),
+      setup/cross-account/aws/README.md (workspace model, spoke account guide, CI/CD
+      behavior). All diagrams use Mermaid for GitHub rendering.'
+- id: deploy-migrate-handoff
+  title: Deploy, Migrate to lacework-dev, and Handoff
+  file: DEPLOY-MIGRATE-HANDOFF.md
+  status: completed
+  goal: Complete first successful apply, validate destroy, migrate repo to lacework-dev
+    org, and hand off to receiving team
+  themes:
+  - deployment
+  - migration
+  - handoff
+  stories:
+  - id: STORY-7
+    status: done
+    notes: Apply succeeded with S3 remote state. Profile fix (demo-mgmt) resolved
+      credential chain. 306 resources deployed successfully to shared state bucket.
+  - id: STORY-8
+    status: done
+    notes: "Skipped \u2014 state is in S3 so destroy can run from lacework-dev post-migration.\
+      \ No need to tear down and rebuild."
+  - id: STORY-9
+    status: done
+    notes: Repo migrated to lacework-dev. Remote, submodule, docs all updated. Secrets
+      set on new repo.
+  - id: STORY-10
+    status: done
+    notes: Bootstrap re-applied with github_owner=lacework-dev. OIDC trust updated.
+      CI/CD working from lacework-dev org.
+  - id: STORY-11
+    status: done
+    notes: Root emails updated, access keys deleted (not just deactivated), passwords
+      transferred to new admin. Credit card update delegated to receiving team.
+backlog: []
+history:
+- date: '2026-02-26'
+  summary: Registered demo-scaffolding in WorkSync.
+- date: '2026-02-27'
+  summary: 'Completed STORY-6: READMEs written: root README.md (architecture, setup
+    guide, CI/CD flow, naming conventions, AWS account security with 1Password MFA
+    walkthrough, migration notes), setup/bootstrap/aws/README.md (resources, trust
+    model, variables, outputs), setup/cross-account/aws/README.md (workspace model,
+    spoke account guide, CI/CD behavior). All diagrams use Mermaid for GitHub rendering.'
+  related_sprints:
+  - initial-setup
+- date: '2026-02-27'
+  summary: 'Completed STORY-7: Apply succeeded with S3 remote state. Profile fix (demo-mgmt)
+    resolved credential chain. 306 resources deployed successfully to shared state
+    bucket.'
+  related_sprints:
+  - deploy-migrate-handoff
+- date: '2026-02-27'
+  summary: 'Completed STORY-9: Repo migrated to lacework-dev. Remote, submodule, docs
+    all updated. Secrets set on new repo.'
+  related_sprints:
+  - deploy-migrate-handoff
+- date: '2026-02-27'
+  summary: 'Completed STORY-10: Bootstrap re-applied with github_owner=lacework-dev.
+    OIDC trust updated. CI/CD working from lacework-dev org.'
+  related_sprints:
+  - deploy-migrate-handoff
+- date: '2026-02-27'
+  summary: 'Completed STORY-11: Root emails updated, access keys deleted (not just
+    deactivated), passwords transferred to new admin. Credit card update delegated
+    to receiving team.'
+  related_sprints:
+  - deploy-migrate-handoff

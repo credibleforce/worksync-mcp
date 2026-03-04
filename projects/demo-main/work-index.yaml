@@ -74,7 +74,7 @@ sprints:
 - id: gcp-compute-parity
   title: GCP Compute Instance Parity
   file: GCP-COMPUTE-PARITY.md
-  status: active
+  status: completed
   goal: 'Bring GCE instance creation to parity with AWS EC2: SSH key management via
     Secret Manager, GCP-native bootstrapping scripts, configurable boot disk, instance
     metadata for accessibility, and structured outputs'
@@ -113,25 +113,86 @@ sprints:
       \ on STORY-9 for the google_compute_instance resource. Reference: terraform-org-management\
       \ gce/instance/main.tf lines 93-106."
   - id: STORY-11
-    status: planned
-    notes: 'Expose GCE instance details in the stack output matching the AWS EC2 output
-      shape: instance id, name, private_ip (network_interface.0.network_ip), public_ip
-      (access_config.0.nat_ip), base64-encoded ssh_key_public and ssh_key (private
-      key PEM), labels, project_id, region. Update terraform/root/gcp/outputs.tf to
-      surface GCE data alongside existing GKE outputs. Reference: terraform-org-management
-      gce/outputs.tf pattern. Depends on STORY-10 for complete instance resource.'
+    status: done
+    notes: 'Created terraform/stacks/gcp/outputs.tf with current output exposing gcp.gce
+      (keyed by instance name: instance_id, self_link, name, private_ip, public_ip,
+      zone, host_type, ssh_user, labels, project_id, region), gcp.security.ssh_keys
+      (base64-encoded public/private keys + Secret Manager refs), and gcp.gke (endpoint,
+      CA cert). Updated terraform/root/gcp/outputs.tf to thread nonsensitive(module.gcp_*.current)
+      for both attacker and target. SSH user lookup via _gce_ssh_user_by_image local
+      mirroring AWS _ec2_ssh_user_by_ami. Also added swap idempotency guards to bootstrap.sh
+      matching AWS user-data.sh.'
   - id: STORY-12
+    status: done
+    notes: "Schema pipeline update complete. Added root_volume_size (*int, min=1),\
+      \ enable_secondary_volume (bool), additional_tasks (string) to GCEInstance struct\
+      \ in synthctl types.go. Rebuilt synthctl and regenerated schemas/infrastructure.json\
+      \ \u2014 all three fields appear in $defs.GCEInstance. Updated terraform-ui\
+      \ configSchemas.js GCE section with matching fields (number, boolean, string\
+      \ types with descriptions). Skipped enable_swap (unconditional in bootstrap),\
+      \ secondary_disk_size (no TF resource), and user_data/user_data_base64 (GCP\
+      \ uses additional_tasks pattern). componentLibrary.js unchanged \u2014 GCE entry\
+      \ already present. Existing configs pass (new fields all omitempty)."
+- id: gcp-operational-tooling
+  title: GCP Operational Tooling
+  file: GCP-OPERATIONAL-TOOLING.md
+  status: planned
+  goal: README documentation for GCP capabilities, synthctl doctor/provider automation
+    for gcloud, GCE exec via IAP tunnel, GKE kubectl integration, and structured output
+    parsing for GCP terraform outputs
+  themes:
+  - gcp
+  - synthctl
+  - documentation
+  - operational
+  stories:
+  - id: STORY-13
     status: planned
-    notes: 'Full schema pipeline update for new GCE instance config fields added in
-      STORY-9/10. Chain: (1) Update synthctl Go types in internal/infrastructure/
-      to add new GCEInstance fields (root_volume_size, enable_swap, enable_secondary_volume,
-      secondary_disk_size, user_data, user_data_base64). (2) Rebuild synthctl and
-      regenerate schemas/infrastructure.json via synthctl schema generate --type infrastructure
-      --provider gcp. (3) Update terraform-ui configSchema.js to include new GCE fields
-      in the form builder. (4) Update terraform-ui componentLibrary.js with appropriate
-      input components (number spinner for volume sizes, toggles for booleans). Validate:
-      all 4 existing GCP infra configs pass schema validation. Depends on STORY-9
-      and STORY-10 to know the final field set.'
+    notes: 'Update demo-main README.md to document GCP capabilities added in gcp-compute-parity
+      sprint. Include: GCP provider setup, GCE instance configuration fields, bootstrap
+      behavior (swap, secondary volume), structured outputs shape, gcloud auth prerequisites.
+      Update architecture diagrams if present. Reference existing AWS documentation
+      sections as template for parallel GCP sections.'
+  - id: STORY-14
+    status: planned
+    notes: 'Add gcloud CLI validation to synthctl doctor command. Checks: (1) gcloud
+      binary exists and is in PATH, (2) gcloud auth list shows active account, (3)
+      gcloud config get-value project returns expected project ID, (4) required APIs
+      enabled (compute, container, secretmanager, iam). Follow existing AWS doctor
+      pattern (aws sts get-caller-identity, aws configure checks). Reference: synthctl/internal/cli/doctor.go.'
+  - id: STORY-15
+    status: planned
+    notes: 'Extend synthctl providers init to automate gcloud project and region configuration.
+      Support --gcp-attacker-project, --gcp-target-project, --gcp-attacker-region,
+      --gcp-target-region flags. Generate config/providers.d/gcp.*.auto.tfvars.json
+      with correct project IDs and regions. Validate project access via gcloud projects
+      describe. Follow existing AWS provider init pattern (--aws-profile, --aws-region
+      flags). Reference: synthctl/internal/cli/providers.go.'
+  - id: STORY-16
+    status: planned
+    notes: Add GCE instance exec support to synthctl via gcloud compute ssh with IAP
+      tunneling. Parse terraform output for instance name, zone, and project. Support
+      both interactive shell (gcloud compute ssh --tunnel-through-iap) and command
+      execution (gcloud compute ssh -- command). Handle OS Login vs metadata SSH key
+      auth. Windows support via gcloud compute reset-windows-password + RDP or PowerShell
+      remoting. Equivalent of AWS SSM session-manager exec in synthctl. Depends on
+      STORY-14 for gcloud doctor checks.
+  - id: STORY-17
+    status: planned
+    notes: Add GKE kubectl context setup to synthctl. Parse terraform output for GKE
+      cluster name, endpoint, and project. Run gcloud container clusters get-credentials
+      to configure kubeconfig. Support both attacker and target cluster contexts.
+      Validate kubectl connectivity after setup. Equivalent of AWS EKS kubeconfig
+      setup in synthctl. Depends on STORY-14 for gcloud doctor checks.
+  - id: STORY-18
+    status: planned
+    notes: 'Add GCP terraform output parsing to synthctl. Read terraform output -json
+      from GCP root and extract structured data: GCE instances (name, zone, IPs, SSH
+      user), GKE clusters (endpoint, CA cert), SSH keys (Secret Manager refs), project/region
+      metadata. Provide synthctl output gcp command with subcommands for instances,
+      clusters, keys. Feed into STORY-16 and STORY-17 for exec and kubectl setup.
+      Reference: existing AWS output parser in synthctl. Depends on STORY-11 current
+      output shape.'
 backlog:
 - id: cicd-sha-pinning
   theme: devops
@@ -407,3 +468,26 @@ history:
     synthctl CLI (go test ./internal/cli/... passes).'
   related_sprints:
   - synthctl-git-repo-rename
+- date: '2026-02-26'
+  summary: 'Completed STORY-11: Created terraform/stacks/gcp/outputs.tf with current
+    output exposing gcp.gce (keyed by instance name: instance_id, self_link, name,
+    private_ip, public_ip, zone, host_type, ssh_user, labels, project_id, region),
+    gcp.security.ssh_keys (base64-encoded public/private keys + Secret Manager refs),
+    and gcp.gke (endpoint, CA cert). Updated terraform/root/gcp/outputs.tf to thread
+    nonsensitive(module.gcp_*.current) for both attacker and target. SSH user lookup
+    via _gce_ssh_user_by_image local mirroring AWS _ec2_ssh_user_by_ami. Also added
+    swap idempotency guards to bootstrap.sh matching AWS user-data.sh.'
+  related_sprints:
+  - gcp-compute-parity
+- date: '2026-02-26'
+  summary: "Completed STORY-12: Schema pipeline update complete. Added root_volume_size\
+    \ (*int, min=1), enable_secondary_volume (bool), additional_tasks (string) to\
+    \ GCEInstance struct in synthctl types.go. Rebuilt synthctl and regenerated schemas/infrastructure.json\
+    \ \u2014 all three fields appear in $defs.GCEInstance. Updated terraform-ui configSchemas.js\
+    \ GCE section with matching fields (number, boolean, string types with descriptions).\
+    \ Skipped enable_swap (unconditional in bootstrap), secondary_disk_size (no TF\
+    \ resource), and user_data/user_data_base64 (GCP uses additional_tasks pattern).\
+    \ componentLibrary.js unchanged \u2014 GCE entry already present. Existing configs\
+    \ pass (new fields all omitempty)."
+  related_sprints:
+  - gcp-compute-parity

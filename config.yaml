@@ -28,6 +28,14 @@ projects:
       - name: synthctl-coding
         source: repo
         path: synthctl/CODING-GUIDANCE.md
+  demo-scaffolding:
+    repo: ~/Documents/dev/demo-scaffolding
+    description: AWS attack simulation lab - OIDC CI/CD scaffolding wrapping lacework-deploy
+      for consulting handover
+    guidance:
+      inherit:
+      - general
+      - ai-collaboration
 vault_path: ./vault
 settings:
   auto_sync: false
