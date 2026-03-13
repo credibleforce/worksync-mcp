@@ -406,6 +406,20 @@ backlog:
   status: todo
   related_sprints:
   - gcp-cicd-foundation
+- id: bedrock-llm-module-migration
+  theme: infrastructure
+  summary: "Migrate Bedrock LLM modules (inference profile, burst guardrail, budget\
+    \ guardrail, alert buckets) from llm-explorer into demo-main schema-driven pattern\
+    \ \u2014 Go structs, schema regen, TF modules, stack wiring, UI components done"
+  status: done
+  related_sprints:
+  - gcp-cicd-foundation
+- id: bedrock-ui-schema-alignment
+  theme: infrastructure
+  summary: "Align terraform-ui configSchemas (4 flat components) with Go schema composite\
+    \ BedrockConfig struct \u2014 may need UI transformation layer or schema redesign"
+  status: todo
+  related_sprints: []
 history:
 - date: '2026-02-24'
   summary: Registered demo-main in WorkSync. Initial backlog populated from repo analysis.
